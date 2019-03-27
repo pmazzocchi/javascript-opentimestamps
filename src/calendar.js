@@ -37,8 +37,12 @@ class RemoteCalendar {
   constructor (url) {
     this.url = url
     this.headers = {
-      Accept: 'application/octet-stream',
+      Accept: 'application/vnd.opentimestamps.v1',
       'Content-Type': 'application/x-www-form-urlencoded'
+    }
+    if (!process.browser) { // running in node.js
+      console.log('Setting User-Agent in request header')
+      this.headers['User-Agent'] = 'javascript-opentimestamps'
     }
   }
 
