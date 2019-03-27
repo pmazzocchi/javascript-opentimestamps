@@ -15,7 +15,7 @@ const Utils = require('./utils.js')
 const Ops = require('./ops.js')
 const Calendar = require('./calendar.js')
 const Notary = require('./notary.js')
-const Insight = require('./insight.js')
+const ExplorerList = require('./explorer-list.js')
 const Merkle = require('./merkle.js')
 const Bitcoin = require('./bitcoin.js')
 
@@ -246,9 +246,13 @@ module.exports = {
    * @exports OpenTimestamps/verify
    * @param {DetachedTimestampFile} detachedStamped - The detached of stamped file.
    * @param {DetachedTimestampFile} detachedOriginal - The detached of original file.
-   * @param {Object} options - The option arguments.
-   * @param {String[]} options.insight.urls - array of insight server urls.
-   * @param {number} options.insight.timeout - timeout (in seconds) used for calls to insight servers.
+
+   * @param {Object}   options - The option arguments.
+   * @param {Object[]} options.explorers: array of block explorer server objects
+   * @param {String}   options.explorers[].url: block explorer server url
+   * @param {String}   options.explorers[].type: block explorer server type: {insight|blockstream}
+   * @param {number}   options.timeout: timeout (in seconds) for the calls to explorer servers
+
    * @param {String[]} options.calendars - Override calendars in timestamp.
    * @param {UrlWhitelist} options.whitelist - Remote calendar whitelist.
    * @return {Promise<HashMap<String,Object>,Error>} if resolve return list of verified attestations indexed by chain.
@@ -278,8 +282,8 @@ module.exports = {
   /** Verify a timestamp.
    * @param {Timestamp} timestamp - The timestamp.
    * @param {Object} options - The option arguments.
-   * @param {String[]} options.insight.urls - array of insight server urls
-   * @param {number} options.insight.timeout - timeout (in seconds) used for calls to insight servers
+   * @param {String[]} options.explorer.urls - array of explorer server urls
+   * @param {number} options.explorer.timeout - timeout (in seconds) used for calls to explorer servers
    * @return {Promise<HashMap<String,Object>,Error>} if resolve return list of verified attestations indexed by chain.
    *    timestamp: unix timestamp
    *    height: block height of the min attestation
@@ -330,9 +334,13 @@ module.exports = {
   /** Verify an attestation.
    * @param {TimeAttestation} attestation - The attestation to verify.
    * @param {byte[]} msg - The digest to verify.
-   * @param {Object} options - The option arguments.
-   * @param {String[]} options.insight.urls - array of insight server urls
-   * @param {number} options.insight.timeout - timeout (in seconds) used for calls to insight servers
+
+   * @param {Object}   options - The option arguments.
+   * @param {number}   options.timeout: timeout (in seconds) for the calls to explorer servers
+   * @param {Object[]} options.explorers: array of block explorer server objects
+   * @param {String}   options.explorers[].url: block explorer server url
+   * @param {String}   options.explorers[].type: block explorer server type: {insight|blockstream}
+
    * @return {Promise<Object,Error>} if resolve return verified attestations parameters
    *    chain: the chain type
    *    attestedTime: unix timestamp fo the block
@@ -341,15 +349,14 @@ module.exports = {
   verifyAttestation (attestation, msg, options) {
     return new Promise((resolve, reject) => {
       function liteVerify (options) {
-        // There is no local node available or is turned of
-        // Request to insight
-        const insightOptionSet = options && Object.prototype.hasOwnProperty.call(options, 'insight')
-        const insightOptions = insightOptionSet ? options.insight : null
-        const chain = insightOptionSet && options.insight.chain ? options.insight.chain : 'bitcoin'
-        const insight = new Insight.MultiInsight(insightOptions)
-        insight.blockhash(attestation.height).then(blockHash => {
+        // there is no local node available or it is turned off
+        // resort to block explorers
+
+        const chain = options && options.chain ? options.chain : 'bitcoin'
+        const explorer = new ExplorerList.ExplorerList(options)
+        explorer.blockhash(attestation.height).then(blockHash => {
           console.log('Lite-client verification, assuming block ' + blockHash + ' is valid')
-          insight.block(blockHash).then(blockHeader => {
+          explorer.block(blockHash).then(blockHeader => {
             // One Bitcoin attestation is enough
             resolve({attestedTime: attestation.verifyAgainstBlockheader(msg.reverse(), blockHeader), 'chain': chain, 'height': attestation.height})
           }).catch(err => {
@@ -376,7 +383,7 @@ module.exports = {
           return reject(err)
         }
       } else if (attestation instanceof Notary.BitcoinBlockHeaderAttestation) {
-        if (options && options.insight && options.insight.urls) {
+        if (options && options.explorers) {
           liteVerify(options)
         } else {
           // Check for local bitcoin configuration
@@ -394,13 +401,15 @@ module.exports = {
             })
           }).catch(() => {
             console.error('Could not connect to local Bitcoin node')
-            liteVerify()
+            // bitcoin is the default chain, but options might change something else
+            liteVerify(options)
           })
         }
       } else if (attestation instanceof Notary.LitecoinBlockHeaderAttestation) {
-        options = {}
-        options.insight = {}
-        options.insight.chain = 'litecoin'
+        if (!options) {
+          options = {}
+        }
+        options.chain = 'litecoin'
         liteVerify(options)
       }
     })
