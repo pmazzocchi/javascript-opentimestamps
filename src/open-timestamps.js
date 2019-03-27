@@ -248,13 +248,31 @@ module.exports = {
    * @param {DetachedTimestampFile} detachedOriginal - The detached of original file.
 
    * @param {Object}   options - The option arguments.
-   * @param {Object[]} options.explorers: array of block explorer server objects
-   * @param {String}   options.explorers[].url: block explorer server url
-   * @param {String}   options.explorers[].type: block explorer server type: {insight|blockstream}
-   * @param {number}   options.timeout: timeout (in seconds) for the calls to explorer servers
-
    * @param {String[]} options.calendars - Override calendars in timestamp.
    * @param {UrlWhitelist} options.whitelist - Remote calendar whitelist.
+   * @param {Object} options.X - The options for chain X.
+   * @param {number} options.X.timeout - timeout (in seconds) used for calls to explorer servers
+   * @param {Object[]} options.X.explorers - array of explorer servers for chain X
+   * @param {String} options.X.explorers[].url - explorer servers url for chain X
+   * @param {String} options.X.explorers[].class - explorer servers type: {insight|blockstream}
+   * 
+   * Example of options:
+   *
+   * const options = {
+   *    bitcoin: {
+   *      explorers: [
+   *        {url: 'https://blockstream.info/api', type: 'blockstream'},
+   *        {url: 'https://blockexplorer.com/api', type: 'insight'}
+   *      ]
+   *    },
+   *    litecoin: {
+   *      explorers: [
+   *        {url: 'https://ltc-bitcore1.trezor.io/api', type: 'insight'},
+   *        {url: 'https://insight.litecore.io/api', type: 'insight'}
+   *      ]
+   *    }
+   *  }
+   *
    * @return {Promise<HashMap<String,Object>,Error>} if resolve return list of verified attestations indexed by chain.
    */
   verify (detachedStamped, detachedOriginal, options) {
@@ -282,8 +300,29 @@ module.exports = {
   /** Verify a timestamp.
    * @param {Timestamp} timestamp - The timestamp.
    * @param {Object} options - The option arguments.
-   * @param {String[]} options.explorer.urls - array of explorer server urls
-   * @param {number} options.explorer.timeout - timeout (in seconds) used for calls to explorer servers
+   * @param {Object} options.X - The options for chain X.
+   * @param {number} options.X.timeout - timeout (in seconds) used for calls to explorer servers
+   * @param {Object[]} options.X.explorers - array of explorer servers for chain X
+   * @param {String} options.X.explorers[].url - explorer servers url for chain X
+   * @param {String} options.X.explorers[].class - explorer servers type: {insight|blockstream}
+   * 
+   * Example of options:
+   *
+   * const options = {
+   *    bitcoin: {
+   *      explorers: [
+   *        {url: 'https://blockstream.info/api', type: 'blockstream'},
+   *        {url: 'https://blockexplorer.com/api', type: 'insight'}
+   *      ]
+   *    },
+   *    litecoin: {
+   *      explorers: [
+   *        {url: 'https://ltc-bitcore1.trezor.io/api', type: 'insight'},
+   *        {url: 'https://insight.litecore.io/api', type: 'insight'}
+   *      ]
+   *    }
+   *  }
+   *
    * @return {Promise<HashMap<String,Object>,Error>} if resolve return list of verified attestations indexed by chain.
    *    timestamp: unix timestamp
    *    height: block height of the min attestation
@@ -331,17 +370,34 @@ module.exports = {
     })
   },
 
-  /** Verify an attestation.
+/** Verify an attestation.
    * @param {TimeAttestation} attestation - The attestation to verify.
    * @param {byte[]} msg - The digest to verify.
-
-   * @param {Object}   options - The option arguments.
-   * @param {number}   options.timeout: timeout (in seconds) for the calls to explorer servers
-   * @param {Object[]} options.explorers: array of block explorer server objects
-   * @param {String}   options.explorers[].url: block explorer server url
-   * @param {String}   options.explorers[].type: block explorer server type: {insight|blockstream}
-
-   * @return {Promise<Object,Error>} if resolve return verified attestations parameters
+   * @param {Object} options - The option arguments.
+   * @param {Object} options.X - The options for chain X.
+   * @param {number} options.X.timeout - timeout (in seconds) used for calls to explorer servers
+   * @param {Object[]} options.X.explorers - array of explorer servers for chain X
+   * @param {String} options.X.explorers[].url - explorer servers url for chain X
+   * @param {String} options.X.explorers[].class - explorer servers type: {insight|blockstream}
+   * 
+   * Example of options:
+   *
+   * const options = {
+   *    bitcoin: {
+   *      explorers: [
+   *        {url: 'https://blockstream.info/api', type: 'blockstream'},
+   *        {url: 'https://blockexplorer.com/api', type: 'insight'}
+   *      ]
+   *    },
+   *    litecoin: {
+   *      explorers: [
+   *        {url: 'https://ltc-bitcore1.trezor.io/api', type: 'insight'},
+   *        {url: 'https://insight.litecore.io/api', type: 'insight'}
+   *      ]
+   *    }
+   *  }
+   * 
+   *  @return {Promise<Object,Error>} if resolve return verified attestations parameters
    *    chain: the chain type
    *    attestedTime: unix timestamp fo the block
    *    height: block height of the attestation
@@ -383,34 +439,47 @@ module.exports = {
           return reject(err)
         }
       } else if (attestation instanceof Notary.BitcoinBlockHeaderAttestation) {
-        if (options && options.explorers) {
-          liteVerify(options)
+        const chain = 'bitcoin'
+        var liteOptions = {chain: chain}
+        if (options && options.bitcoin) {
+          Object.assign(liteOptions, options.bitcoin)
+          liteVerify(liteOptions)
         } else {
           // Check for local bitcoin configuration
           Bitcoin.BitcoinNode.readBitcoinConf().then(properties => {
             const bitcoin = new Bitcoin.BitcoinNode(properties)
-            bitcoin.getBlockHeader(attestation.height).then(blockHeader => {
-              // One Bitcoin attestation is enought
-              resolve({
-                attestedTime: attestation.verifyAgainstBlockheader(msg.reverse(), blockHeader),
-                chain: 'bitcoin',
-                height: attestation.height
-              })
-            }).catch((err) => {
-              reject(new Notary.VerificationError('Bitcoin verification failed: ' + err.message))
-            })
+            bitcoin.getChain().then(localChain => {
+              if (localChain !== 'main') {
+                console.error('Local Bitcoin node not on Mainnet')
+                liteVerify(liteOptions)
+              } else {
+                bitcoin.getBlockHeader(attestation.height).then(blockHeader => {
+                  // One Bitcoin attestation is enought
+                  resolve({
+                    attestedTime: attestation.verifyAgainstBlockheader(msg.reverse(), blockHeader),
+                    chain: chain,
+                    height: attestation.height
+                  })
+                }).catch((err) => {
+                  reject(new Notary.VerificationError('Bitcoin verification failed: ' + err.message))
+                })
+              }
+            }).catch(err => {
+              console.error('Could not detect local node\'s chain: ' + err.message)
+              liteVerify(liteOptions)
+            })  
           }).catch(() => {
             console.error('Could not connect to local Bitcoin node')
-            // bitcoin is the default chain, but options might change something else
-            liteVerify(options)
+            liteVerify(liteOptions)
           })
         }
       } else if (attestation instanceof Notary.LitecoinBlockHeaderAttestation) {
-        if (!options) {
-          options = {}
+        var liteOptions = {}
+        if (options && options.litecoin) {
+          liteOptions = options.litecoin
         }
-        options.chain = 'litecoin'
-        liteVerify(options)
+        liteOptions.chain = 'litecoin'
+        liteVerify(liteOptions)
       }
     })
   },
