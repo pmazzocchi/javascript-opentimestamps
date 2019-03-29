@@ -182,7 +182,7 @@ class UrlWhitelist {
 const DEFAULT_CALENDAR_WHITELIST =
     new UrlWhitelist(['https://*.calendar.opentimestamps.org', // Run by Peter Todd
     'https://*.calendar.eternitywall.com', // Run by Riccardo Casatta of Eternity Wall
-    'https://*.dgi.io/', // Run by Digital Gold Institute
+    'https://btc-ots.dgi.io', // Run by Digital Gold Institute
     'https://*.calendar.catallaxy.com' // Run by Vincent Cloutier of Catallaxy
   ])
 
@@ -190,7 +190,7 @@ const DEFAULT_AGGREGATORS =
     ['https://a.pool.opentimestamps.org',
       'https://b.pool.opentimestamps.org',
       'https://a.pool.eternitywall.com',
-      'https://btc-ots.dgi.io/',
+      'https://btc-ots.dgi.io',
       'https://ots.btc.catallaxy.com']
 
 module.exports = {
