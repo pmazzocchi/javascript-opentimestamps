@@ -189,7 +189,7 @@ const DEFAULT_AGGREGATORS =
     ['https://a.pool.opentimestamps.org',
       'https://b.pool.opentimestamps.org',
       'https://a.pool.eternitywall.com',
-      'https://btc.ots.dgi.io',
+      'https://a.pool.dgi.io',
       'https://ots.btc.catallaxy.com']
 
 module.exports = {
